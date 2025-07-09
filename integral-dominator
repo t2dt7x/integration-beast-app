@@ -1,0 +1,183 @@
+# Save this file as app.py
+from flask import Flask, request, jsonify
+from flask_cors import CORS
+import sympy as sp
+from sympy.integrals.manualintegrate import integral_steps
+from sympy.parsing.sympy_parser import parse_expr
+import re
+import traceback
+import warnings
+import wolframalpha
+import io
+import base64
+import matplotlib
+matplotlib.use('Agg') # Non-interactive backend
+import matplotlib.pyplot as plt
+import numpy as np
+
+warnings.filterwarnings('ignore')
+
+# --- Your IntegrationBeast Class (Now Streamlined for Web Deployment) ---
+class IntegrationBeast:
+    """The ultimate integration machine, optimized as a web powerhouse. 🦍🔥🌌"""
+    def __init__(self):
+        self.x = sp.Symbol('x')
+        self.variables = {'x': self.x}
+        self.current_var = self.x
+        self.nl_patterns = {
+            r'integrate\s+(.+?)(?:\s+with\s+respect\s+to\s+(\w+))?': self._parse_integrate,
+            r'what.*integral.*of\s+(.+?)(?:\?|$)': self._parse_integral_of,
+            r'solve\s+∫\s*(.+?)(?:\s*d(\w+))?': self._parse_solve_integral,
+            r'(.+?)\s+times\s+(.+?)': self._parse_times,
+            r'(.+?)\s+plus\s+(.+?)': self._parse_plus,
+            r'(.+?)\s+divided\s+by\s+(.+?)': self._parse_divided_by,
+        }
+        self.non_elementary_patterns = [
+            r'exp\(x\*\*2\)', r'sin\(x\)/x', r'cos\(x\)/x', r'1/log\(x\)',
+        ]
+        self.special_integrals = {
+            'sec(x)': 'log(Abs(sec(x) + tan(x)))',
+            'csc(x)': '-log(Abs(csc(x) + cot(x)))',
+            '1/sqrt(1-x**2)': 'asin(x)',
+            '1/(1+x**2)': 'atan(x)',
+        }
+        self.wolfram_client = None
+        self.set_wolfram_api_key("WUUG9Y-JQJ658L72G")
+
+    def set_wolfram_api_key(self, api_key: str):
+        if api_key and api_key != "YOUR_API_KEY":
+            try:
+                self.wolfram_client = wolframalpha.Client(api_key)
+                print("✅ Wolfram Alpha client initialized successfully.")
+            except Exception as e:
+                self.wolfram_client = None
+                print(f"❌ Failed to initialize Wolfram Alpha client: {e}")
+
+    def parse_natural_language(self, user_input: str) -> str:
+        # This function remains the same as your powerful original
+        user_input = user_input.lower().strip()
+        for pattern, parser in self.nl_patterns.items():
+            match = re.search(pattern, user_input, re.IGNORECASE)
+            if match:
+                try: result = parser(match); return result if result else user_input
+                except: continue
+        return user_input
+
+    def _parse_integrate(self, match): return match.group(1).strip()
+    def _parse_integral_of(self, match): return match.group(1).strip()
+    def _parse_solve_integral(self, match): return match.group(1).strip()
+    def _parse_times(self, match): return f"({match.group(1).strip()}) * ({match.group(2).strip()})"
+    def _parse_plus(self, match): return f"({match.group(1).strip()}) + ({match.group(2).strip()})"
+    def _parse_divided_by(self, match): return f"({match.group(1).strip()}) / ({match.group(2).strip()})"
+
+    def preprocess_input(self, user_input: str) -> str:
+        expr = user_input.strip()
+        replacements = {'^': '**', 'ln': 'log', '√': 'sqrt', 'π': 'pi'}
+        for old, new in replacements.items():
+            expr = expr.replace(old, new)
+        expr = re.sub(r'(\d)([a-zA-Z(])', r'\1*\2', expr)
+        expr = re.sub(r'(\))([0-9xa-zA-Z])', r'\1*\2', expr)
+        return expr
+
+    def wolfram_fallback(self, expr_str: str) -> str:
+        if not self.wolfram_client:
+            return "Wolfram Alpha API key not configured."
+        try:
+            res = self.wolfram_client.query(f"integrate {expr_str}", timeout=5)
+            return next(res.results).text
+        except StopIteration:
+            return "Wolfram Alpha could not find a result."
+        except Exception as e:
+            return f"Wolfram Alpha query failed: {e}"
+
+    def plot_integral(self, expr, result, limits=None):
+        if not isinstance(expr, sp.Expr) or not isinstance(result, sp.Expr):
+            return None # Cannot plot if inputs are not valid SymPy expressions
+        try:
+            p = sp.plot(
+                (expr, (self.x, -5, 5)),
+                (result, (self.x, -5, 5)),
+                show=False,
+                title='Integration Visualization',
+                legend=True
+            )
+            p[0].line_color = '#00ffff'
+            p[0].label = f'Integrand: ${sp.latex(expr)}$'
+            p[1].line_color = '#ff00ff'
+            p[1].label = f'Antiderivative: ${sp.latex(result)}$'
+
+            # Save plot to a byte stream
+            buf = io.BytesIO()
+            p.save(buf)
+            buf.seek(0)
+            img_base64 = base64.b64encode(buf.read()).decode('utf-8')
+            return f"data:image/png;base64,{img_base64}"
+        except Exception as e:
+            return f"Plotting failed: {e}"
+
+    def solve_step_by_step(self, user_input: str) -> dict:
+        output = {"logs": []}
+        limits = None
+        expr_str = user_input
+
+        # ** NEW FEATURE: Detect definite integrals **
+        match = re.search(r'(.+)\s+(?:from|between)\s+([-\w\.]+)\s+(?:to|and)\s+([-\w\.]+)', user_input, re.I)
+        if match:
+            expr_str = match.group(1)
+            try:
+                limits = (sp.sympify(match.group(2)), sp.sympify(match.group(3)))
+                output["logs"].append(f"🔍 Definite integral detected. Limits: {limits}")
+            except sp.SympifyError:
+                output["logs"].append("⚠️ Could not parse definite integral limits.")
+
+        try:
+            natural_parsed = self.parse_natural_language(expr_str)
+            processed = self.preprocess_input(natural_parsed)
+            expr = parse_expr(processed, transformations='all', local_dict=self.variables)
+            
+            output["processed_expr"] = f"\\int_{{{sp.latex(limits[0]) if limits else ''}}}^{{{sp.latex(limits[1]) if limits else ''}}} {sp.latex(expr)} \\,dx"
+
+            # Perform Integration
+            if limits:
+                antiderivative = sp.integrate(expr, self.x)
+                result = sp.integrate(expr, (self.x, limits[0], limits[1]))
+                output["definite_result"] = f"{sp.latex(result)} \\approx {sp.N(result)}"
+                output["latex_solution"] = f"{sp.latex(antiderivative)} + C"
+            else:
+                result = sp.integrate(expr, self.x)
+                output["latex_solution"] = f"{sp.latex(result)} + C"
+
+            output["plot"] = self.plot_integral(expr, result if not limits else antiderivative, limits)
+
+            if sp.simplify(sp.diff(result if not limits else antiderivative, self.x) - expr) == 0:
+                output["verification"] = "✅ Success: Derivative matches the integrand."
+            else:
+                output["verification"] = "⚠️ Warning: Derivative check inconclusive."
+
+            output["logs"].append("🎉 Integration successful!")
+            return output
+
+        except Exception as e:
+            output["error"] = f"The Beast Engine encountered an error: {e}"
+            output["logs"].append(f"❌ TRACEBACK: {traceback.format_exc()}")
+            output["wolfram_result"] = self.wolfram_fallback(user_input) # Fallback with original query
+            return output
+
+# --- Flask App Setup (CORS is enabled here) ---
+app = Flask(__name__)
+CORS(app)
+beast = IntegrationBeast()
+
+@app.route('/solve', methods=['POST'])
+def solve():
+    data = request.get_json()
+    if not data or 'expression' not in data:
+        return jsonify({'error': 'Invalid input'}), 400
+    
+    result = beast.solve_step_by_step(data['expression'])
+    return jsonify(result)
+
+if __name__ == '__main__':
+    print("🔥 Integration Beast Server is running at http://127.0.0.1:5000 🔥")
+    print("   This version is streamlined for web deployment.")
+    app.run(port=5000, debug=False)
