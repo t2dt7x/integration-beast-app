@@ -95,8 +95,8 @@
             resultsContent.innerHTML = '';
 
             try {
-                // The bridge to your Python backend remains the same
-                const response = await fetch('http://127.0.0.1:5000/solve', {
+                // The bridge to your Python backend with the updated Replit URL
+                const response = await fetch('https://integration-beast-app.t2dt.repl.co/solve', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ expression: input })
@@ -106,7 +106,7 @@
                 displayResults(data, input);
 
             } catch (error) {
-                showError(`Failed to connect to the Integration Beast Engine. Is the app.py server running?\nDetails: ${error.message}`);
+                showError(`Failed to connect to the Integration Beast Engine. Is the Replit server running?\nDetails: ${error.message}`);
             } finally {
                 loadingDiv.style.display = 'none';
             }
@@ -121,7 +121,7 @@
             // Processed LaTeX Expression
             html += `<div class="result-item"><div class="result-label">🔄 Processed Expression</div><div class="result-value latex-output">$$${data.processed_expr || ''}$$</div></div>`;
 
-            // ** NEW: Handle definite integral result **
+            // Handle definite integral result
             if (data.definite_result) {
                  html += `<div class="result-item success"><div class="result-label">🎯 Definite Result</div><div class="result-value latex-output">$$${data.definite_result}$$</div></div>`;
             }
