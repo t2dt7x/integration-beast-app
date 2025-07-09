@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Integration Beast</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap');
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Orbitron', monospace; background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #16213e 100%); color: #00ffff; overflow-x: hidden; min-height: 100vh; position: relative; }
+        .particles { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; }
+        .particle { position: absolute; width: 2px; height: 2px; background: #00ffff; border-radius: 50%; animation: float 6s infinite ease-in-out; opacity: 0.7; }
+        @keyframes float { 0%, 100% { transform: translateY(0px); } 50% { transform: translateY(-20px); } }
+        .neural-bg { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: radial-gradient(circle at 20% 20%, rgba(0,255,255,0.1) 0%, transparent 50%), radial-gradient(circle at 80% 80%, rgba(255,0,255,0.1) 0%, transparent 50%); z-index: 0; animation: pulse 8s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 0.3; } 50% { opacity: 0.7; } }
+        .container { position: relative; z-index: 10; max-width: 1200px; margin: 0 auto; padding: 20px; }
+        .header { text-align: center; margin-bottom: 40px; background: rgba(0,255,255,0.1); backdrop-filter: blur(10px); border: 1px solid rgba(0,255,255,0.3); border-radius: 20px; padding: 30px; position: relative; overflow: hidden; }
+        .header::before { content: ''; position: absolute; top: -50%; left: -50%; width: 200%; height: 200%; background: linear-gradient(45deg, transparent, rgba(0,255,255,0.1), transparent); animation: scan 3s infinite; }
+        @keyframes scan { 0% { transform: translateX(-100%) translateY(-100%) rotate(45deg); } 100% { transform: translateX(100%) translateY(100%) rotate(45deg); } }
+        .logo { font-size: 3.5rem; font-weight: 900; background: linear-gradient(45deg, #00ffff, #ff00ff, #00ff00); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; text-shadow: 0 0 30px rgba(0,255,255,0.5); animation: glow 2s ease-in-out infinite alternate; }
+        .subtitle { font-size: 1.2rem; margin-top: 10px; color: #00ffff; opacity: 0.8; }
+        .input-section { background: rgba(0,0,0,0.7); backdrop-filter: blur(15px); border: 2px solid rgba(0,255,255,0.3); border-radius: 25px; padding: 40px; margin-bottom: 30px; }
+        .input-label { font-size: 1.1rem; margin-bottom: 15px; display: block; color: #00ffff; font-weight: 700; }
+        .math-input { width: 100%; padding: 20px 25px; background: rgba(0,30,60,0.8); border: 2px solid rgba(0,255,255,0.3); border-radius: 15px; color: #00ffff; font-size: 1.2rem; font-family: 'Orbitron', monospace; outline: none; transition: all 0.3s ease; }
+        .math-input:focus { border-color: #00ffff; box-shadow: 0 0 25px rgba(0,255,255,0.4); }
+        .solve-btn { width: 100%; padding: 20px; margin-top: 20px; background: linear-gradient(45deg, #0066cc, #00ffff, #0066cc); border: none; border-radius: 15px; color: #000; font-size: 1.3rem; font-weight: 700; cursor: pointer; transition: all 0.3s ease; text-transform: uppercase; letter-spacing: 2px; }
+        .solve-btn:hover { transform: translateY(-3px); box-shadow: 0 10px 30px rgba(0,255,255,0.4); }
+        .results-section { background: rgba(0,0,0,0.8); backdrop-filter: blur(20px); border: 2px solid rgba(0,255,255,0.3); border-radius: 25px; padding: 40px; margin-top: 30px; min-height: 200px; }
+        .result-item { margin-bottom: 25px; padding: 20px; background: rgba(0,255,255,0.1); border-radius: 15px; border-left: 4px solid #00ffff; animation: slideIn 0.5s forwards; }
+        @keyframes slideIn { to { opacity: 1; } }
+        .result-label { font-size: 1.1rem; color: #00ffff; font-weight: 700; margin-bottom: 10px; }
+        .result-value { font-size: 1.3rem; color: #ffffff; word-break: break-all; white-space: pre-wrap; font-family: 'Courier New', monospace; }
+        .latex-output, .plot-output { background: rgba(0,0,0,0.5); padding: 20px; border-radius: 10px; border: 1px solid rgba(0,255,255,0.2); margin-top: 10px; text-align: center; }
+        .plot-output img { max-width: 100%; border-radius: 10px; }
+        .loading { display: none; text-align: center; padding: 40px; }
+        .loading-spinner { width: 60px; height: 60px; border: 4px solid rgba(0,255,255,0.3); border-top: 4px solid #00ffff; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 20px; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .loading-text { font-size: 1.2rem; color: #00ffff; }
+        .error { border-left-color: #ff0000; background: rgba(255,0,0,0.1); }
+        .success { border-left-color: #00ff00; background: rgba(0,255,0,0.1); }
+        .logs-section { font-family: 'Courier New', monospace; font-size: 0.9rem; color: #aaa; max-height: 200px; overflow-y: auto; background: #050510; padding: 15px; border-radius: 10px; border: 1px solid #00ffff22; margin-top: 10px; }
+    </style>
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+</head>
+<body>
+    <div class="neural-bg"></div>
+    <div class="particles" id="particles"></div>
+    
+    <div class="container">
+        <div class="header">
+            <div class="logo">🦍 INTEGRATION BEAST 🔥</div>
+            <div class="subtitle">The Ultimate Calculus Solver - Now with Definite Integrals</div>
+        </div>
+
+        <div class="input-section">
+            <label class="input-label">🧠 Enter Your Mathematical Expression</label>
+            <input type="text" class="math-input" id="mathInput" placeholder="e.g., x*sin(x)  OR  x^2 from 0 to 1">
+            <button class="solve-btn" onclick="solveIntegral()">🚀 COMPUTE INTEGRAL</button>
+        </div>
+
+        <div class="results-section" id="resultsSection">
+            <div class="loading" id="loadingDiv">
+                <div class="loading-spinner"></div>
+                <div class="loading-text">Connecting to Python Beast Engine...</div>
+            </div>
+            <div id="resultsContent">
+                 <div class="result-item">
+                    <div class="result-label">🤖 System Status</div>
+                    <div class="result-value" style="font-family: Orbitron;">Ready for mathematical computation.</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Particle creation is preserved
+        function createParticles() {
+            const container = document.getElementById('particles');
+            for (let i = 0; i < 50; i++) {
+                const p = document.createElement('div'); p.className = 'particle';
+                p.style.left = `${Math.random()*100}%`; p.style.top = `${Math.random()*100}%`;
+                p.style.animationDelay = `${Math.random()*6}s`; container.appendChild(p);
+            }
+        }
+        createParticles();
+
+        async function solveIntegral() {
+            const input = document.getElementById('mathInput').value.trim();
+            if (!input) { showError('Please enter an expression.'); return; }
+
+            const loadingDiv = document.getElementById('loadingDiv');
+            const resultsContent = document.getElementById('resultsContent');
+            loadingDiv.style.display = 'block';
+            resultsContent.innerHTML = '';
+
+            try {
+                // The bridge to your Python backend remains the same
+                const response = await fetch('http://127.0.0.1:5000/solve', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ expression: input })
+                });
+                if (!response.ok) throw new Error(`Server connection error: ${response.statusText}`);
+                const data = await response.json();
+                displayResults(data, input);
+
+            } catch (error) {
+                showError(`Failed to connect to the Integration Beast Engine. Is the app.py server running?\nDetails: ${error.message}`);
+            } finally {
+                loadingDiv.style.display = 'none';
+            }
+        }
+
+        function displayResults(data, originalInput) {
+            const resultsContent = document.getElementById('resultsContent');
+            let html = '';
+
+            if (data.error) { showError(data.error); return; }
+            
+            // Processed LaTeX Expression
+            html += `<div class="result-item"><div class="result-label">🔄 Processed Expression</div><div class="result-value latex-output">$$${data.processed_expr || ''}$$</div></div>`;
+
+            // ** NEW: Handle definite integral result **
+            if (data.definite_result) {
+                 html += `<div class="result-item success"><div class="result-label">🎯 Definite Result</div><div class="result-value latex-output">$$${data.definite_result}$$</div></div>`;
+            }
+            
+            // Antiderivative / Indefinite Solution
+            html += `<div class="result-item ${!data.definite_result ? 'success' : ''}"><div class="result-label">${data.definite_result ? '🌱 Antiderivative' : '🎉 Solution'}</div><div class="result-value latex-output">$$${data.latex_solution || 'Not found'}$$</div></div>`;
+
+            if(data.verification) html += `<div class="result-item"><div class="result-label">✅ Verification</div><div class="result-value">${data.verification}</div></div>`;
+            if (data.plot) html += `<div class="result-item"><div class="result-label">📊 Visualization</div><div class="plot-output"><img src="${data.plot}" alt="Integral Plot"/></div></div>`;
+            if (data.wolfram_result) html += `<div class="result-item"><div class="result-label">🌐 Wolfram Alpha Fallback</div><div class="result-value">${data.wolfram_result}</div></div>`;
+            if (data.logs) html += `<div class="result-item"><div class="result-label">⚙️ Beast Engine Logs</div><div class="logs-section">${data.logs.join('\n')}</div></div>`;
+
+            resultsContent.innerHTML = html;
+            MathJax.typeset(); // Re-render MathJax for the new content
+        }
+
+        function showError(message) {
+            const resultsContent = document.getElementById('resultsContent');
+            resultsContent.innerHTML = `<div class="result-item error"><div class="result-label">❌ Error</div><div class="result-value">${message}</div></div>`;
+        }
+        
+        document.getElementById('mathInput').addEventListener('keypress', e => e.key === 'Enter' && solveIntegral());
+    </script>
+</body>
+</html>
